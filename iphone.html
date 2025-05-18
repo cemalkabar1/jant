@@ -1,114 +1,122 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-    <!-- Mevcut head içeriği aynı kalacak -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jant Montaj (Ücretsiz BG Temizleme + İndirme)</title>
     <style>
-        /* Yeni eklenen stil */
-        .file-source-buttons {
-            display: none;
-            position: fixed;
-            bottom: 100px;
-            left: 20px;
-            right: 20px;
-            background: white;
-            border-radius: 14px;
-            padding: 15px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-            z-index: 1000;
+        body { font-family: Arial, sans-serif; text-align: center; background-color: #f5f5f5; margin: 0; padding: 20px; }
+        #editor { max-width: 900px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        #canvas-container { position: relative; display: inline-block; margin-top: 20px; }
+        #canvas { border: 2px solid #4CAF50; background-color: #f9f9f9; display: block; max-width: 100%; }
+        .upload-area { margin-bottom: 15px; }
+        button, input[type="file"] { 
+            padding: 10px 15px; 
+            margin: 5px; 
+            border: none; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            font-size: 14px;
         }
-        .source-btn {
-            display: block;
-            width: 100%;
-            padding: 12px;
-            margin: 5px 0;
-            background: #f2f2f7;
-            border: none;
-            border-radius: 10px;
-            font-size: 16px;
-        }
-        .close-source {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            border: none;
-            background: none;
-            font-size: 20px;
+        button { background-color: #4CAF50; color: white; }
+        button:hover { background-color: #45a049; }
+        #status { color: #4CAF50; font-weight: bold; height: 20px; }
+        .processing { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; justify-content: center; align-items: center; color: white; z-index: 1000; }
+        #download-btn { background-color: #2196F3; margin-top: 10px; }
+        #download-btn:hover { background-color: #0b7dda; }
+        
+        /* iOS için özel stiller */
+        @supports (-webkit-touch-callout: none) {
+            input[type="file"] {
+                width: 100%;
+                max-width: 300px;
+            }
+            button {
+                padding: 12px 15px;
+                margin: 8px;
+            }
         }
     </style>
 </head>
 <body>
-    <!-- Mevcut body içeriği aynı -->
-
-    <!-- Yeni eklenen galeri seçim arayüzü -->
-    <div class="file-source-buttons" id="fileSourceButtons">
-        <button class="close-source" id="closeSource">×</button>
-        <button class="source-btn" id="takePhotoBtn">📷 Kamera ile Çek</button>
-        <button class="source-btn" id="chooseFromGalleryBtn">🖼️ Galeriden Seç</button>
+    <div id="editor">
+        <h1>🚗 Jant Montaj (Ücretsiz BG Temizleme)</h1>
+        <div class="upload-area">
+            <input type="file" id="upload-vehicle" accept="image/*">
+            <input type="file" id="upload-wheel" accept="image/*">
+            <button id="remove-bg">Jant Arka Planını Temizle (Ücretsiz)</button>
+            <button id="download-btn">💾 Montajı İndir</button>
+        </div>
+        <div id="status"></div>
+        <div id="canvas-container">
+            <canvas id="canvas" width="600" height="400"></canvas>
+        </div>
     </div>
 
+    <div id="processing" class="processing">
+        Arka plan temizleniyor, lütfen bekleyin...
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
     <script>
-        // Yeni eklenen fonksiyonlar
-        const showFileSourceOptions = (type) => {
-            const sourceButtons = document.getElementById('fileSourceButtons');
-            sourceButtons.style.display = 'block';
+        document.addEventListener('DOMContentLoaded', () => {
+            const canvas = new fabric.Canvas('canvas');
+            const statusEl = document.getElementById('status');
+            const processingEl = document.getElementById('processing');
+            let wheelImage = null;
             
-            document.getElementById('closeSource').onclick = () => {
-                sourceButtons.style.display = 'none';
-            };
+            // iOS Safari için canvas boyut ayarı
+            function adjustCanvasSize() {
+                const container = document.getElementById('canvas-container');
+                const maxWidth = Math.min(600, window.innerWidth - 40);
+                const ratio = 400 / 600;
+                const height = maxWidth * ratio;
+                
+                canvas.setDimensions({
+                    width: maxWidth,
+                    height: height
+                });
+                
+                // Eğer arkaplan varsa yeniden ölçekle
+                if (canvas.backgroundImage) {
+                    const img = canvas.backgroundImage;
+                    const scale = Math.min(
+                        maxWidth / img.width,
+                        height / img.height
+                    );
+                    img.scale(scale);
+                    canvas.renderAll();
+                }
+                
+                // Eğer jant varsa yeniden konumlandır
+                if (wheelImage) {
+                    wheelImage.set({
+                        left: maxWidth / 2,
+                        top: height / 2
+                    });
+                    canvas.renderAll();
+                }
+            }
             
-            document.getElementById('takePhotoBtn').onclick = () => {
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.accept = 'image/*';
-                input.capture = 'environment';
-                input.onchange = (e) => handleFileUpload(e, type);
-                input.click();
-                sourceButtons.style.display = 'none';
-            };
-            
-            document.getElementById('chooseFromGalleryBtn').onclick = () => {
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.accept = 'image/*';
-                input.onchange = (e) => handleFileUpload(e, type);
-                input.click();
-                sourceButtons.style.display = 'none';
-            };
-        };
+            // Sayfa yüklendiğinde ve yeniden boyutlandırıldığında çağır
+            adjustCanvasSize();
+            window.addEventListener('resize', adjustCanvasSize);
 
-        // Mevcut butonları güncelleme
-        document.getElementById('car-upload').onclick = (e) => {
-            e.preventDefault();
-            showFileSourceOptions('car');
-        };
-        
-        // Wheel upload için eski mantık korunsun
-        document.getElementById('wheel-upload').onclick = (e) => {
-            e.preventDefault();
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = 'image/*';
-            input.onchange = (e) => handleFileUpload(e, 'wheel');
-            input.click();
-        };
-
-        // Handle File Upload fonksiyonu (mevcut kodda zaten var)
-        const handleFileUpload = (event, type) => {
-            const file = event.target.files[0];
-            if (!file) return;
-            
-            const status = document.getElementById('status-message');
-            status.textContent = type === 'car' ? 'Araç yükleniyor...' : 'Jant yükleniyor...';
-            status.style.color = '#007AFF';
-            
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                fabric.Image.fromURL(e.target.result, (img) => {
-                    if (type === 'car') {
+            // Araç Yükleme (iOS uyumlu)
+            document.getElementById('upload-vehicle').addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                statusEl.textContent = "Araç yükleniyor...";
+                const reader = new FileReader();
+                
+                reader.onload = function(event) {
+                    fabric.Image.fromURL(event.target.result, function(img) {
                         const scale = Math.min(
-                            canvas.width * 0.9 / img.width,
-                            canvas.height * 0.7 / img.height
+                            canvas.width / img.width,
+                            canvas.height / img.height
                         );
+                        
                         img.scale(scale).set({
                             left: canvas.width / 2,
                             top: canvas.height / 2,
@@ -116,10 +124,34 @@
                             originY: 'center',
                             selectable: false
                         });
-                        canvas.setBackgroundImage(img, () => canvas.renderAll());
-                    } else {
-                        const targetSize = Math.min(canvas.width, canvas.height) * 0.35;
+                        
+                        canvas.setBackgroundImage(img, () => {
+                            canvas.renderAll();
+                            statusEl.textContent = `Araç yüklendi! (${(scale*100).toFixed(0)}% ölçek)`;
+                            setTimeout(() => statusEl.textContent = "", 3000);
+                        }, { originX: 'center', originY: 'center' });
+                    }, { crossOrigin: 'anonymous' });
+                };
+                
+                reader.onerror = () => statusEl.textContent = "Hata: Araç yüklenemedi!";
+                reader.readAsDataURL(file);
+            });
+
+            // Jant Yükleme (iOS uyumlu)
+            document.getElementById('upload-wheel').addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                statusEl.textContent = "Jant yükleniyor...";
+                const reader = new FileReader();
+                
+                reader.onload = function(event) {
+                    fabric.Image.fromURL(event.target.result, function(img) {
+                        if (wheelImage) canvas.remove(wheelImage);
+                        
+                        const targetSize = Math.min(canvas.width, canvas.height) * 0.3;
                         const scale = targetSize / Math.max(img.width, img.height);
+                        
                         img.scale(scale).set({
                             left: canvas.width / 2,
                             top: canvas.height / 2,
@@ -128,23 +160,161 @@
                             angle: 0,
                             hasControls: true,
                             cornerStyle: 'circle',
-                            cornerColor: '#FF9500',
-                            cornerSize: 12,
+                            cornerColor: '#FF5722',
                             transparentCorners: false
                         });
-                        if (canvas.getActiveObject()) canvas.discardActiveObject();
-                        canvas.add(img).setActiveObject(img);
+                        
+                        canvas.add(img);
+                        wheelImage = img;
+                        statusEl.textContent = `Jant yüklendi! (${(scale*100).toFixed(0)}% ölçek)`;
+                        setTimeout(() => statusEl.textContent = "", 3000);
+                    }, { crossOrigin: 'anonymous' });
+                };
+                
+                reader.onerror = () => statusEl.textContent = "Hata: Jant yüklenemedi!";
+                reader.readAsDataURL(file);
+            });
+
+            // ÜCRETSİZ Arka Plan Temizleme (iOS uyumlu)
+            document.getElementById('remove-bg').addEventListener('click', async () => {
+                if (!wheelImage) {
+                    statusEl.textContent = "Önce jant resmi yükleyin!";
+                    return;
+                }
+
+                processingEl.style.display = 'flex';
+                statusEl.textContent = "Arka plan temizleniyor...";
+                
+                try {
+                    // 1. Canvas'tan jant görüntüsünü al
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = wheelImage.width * wheelImage.scaleX;
+                    tempCanvas.height = wheelImage.height * wheelImage.scaleY;
+                    const ctx = tempCanvas.getContext('2d');
+                    
+                    // 2. Jantı geçici canvasa çiz
+                    ctx.drawImage(
+                        wheelImage._element,
+                        0, 0, wheelImage.width, wheelImage.height,
+                        0, 0, tempCanvas.width, tempCanvas.height
+                    );
+                    
+                    // 3. Basit arka plan temizleme (ücretsiz yöntem)
+                    const imageData = ctx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+                    const data = imageData.data;
+                    
+                    // Beyaz ve açık renkli arkaplanları şeffaf yap
+                    for (let i = 0; i < data.length; i += 4) {
+                        const r = data[i];
+                        const g = data[i + 1];
+                        const b = data[i + 2];
+                        
+                        // Arkaplan rengi eşik değeri (ayarlanabilir)
+                        if (r > 200 && g > 200 && b > 200) {
+                            data[i + 3] = 0; // Alpha kanalını 0 yap (şeffaf)
+                        }
                     }
-                    status.textContent = type === 'car' ? 'Araç yüklendi!' : 'Jant yüklendi!';
-                    status.style.color = '#34C759';
-                }, { crossOrigin: 'anonymous' });
-            };
-            reader.onerror = () => {
-                status.textContent = 'Yükleme hatası!';
-                status.style.color = '#FF3B30';
-            };
-            reader.readAsDataURL(file);
-        };
+                    
+                    ctx.putImageData(imageData, 0, 0);
+                    
+                    // 4. Temizlenmiş görüntüyü yükle
+                    fabric.Image.fromURL(tempCanvas.toDataURL(), cleanedImg => {
+                        cleanedImg.set({
+                            left: wheelImage.left,
+                            top: wheelImage.top,
+                            angle: wheelImage.angle,
+                            scaleX: wheelImage.scaleX,
+                            scaleY: wheelImage.scaleY,
+                            originX: 'center',
+                            originY: 'center',
+                            hasControls: true
+                        });
+                        
+                        canvas.remove(wheelImage);
+                        canvas.add(cleanedImg);
+                        wheelImage = cleanedImg;
+                        
+                        statusEl.textContent = "Arka plan başarıyla temizlendi!";
+                        processingEl.style.display = 'none';
+                    });
+                    
+                } catch (error) {
+                    statusEl.textContent = `Hata: ${error.message}`;
+                    processingEl.style.display = 'none';
+                    console.error("Arka Plan Temizleme Hatası:", error);
+                }
+            });
+
+            // İNDİRME FONKSİYONU (iOS uyumlu)
+            document.getElementById('download-btn').addEventListener('click', function() {
+                if (!canvas.backgroundImage || !wheelImage) {
+                    statusEl.textContent = "Önce araç ve jant yükleyin!";
+                    return;
+                }
+
+                processingEl.style.display = 'flex';
+                statusEl.textContent = "Resim hazırlanıyor...";
+                
+                setTimeout(() => {
+                    try {
+                        // 1. Yeni canvas oluştur
+                        const downloadCanvas = document.createElement('canvas');
+                        downloadCanvas.width = canvas.width;
+                        downloadCanvas.height = canvas.height;
+                        const ctx = downloadCanvas.getContext('2d');
+                        
+                        // 2. Arkaplanı çiz
+                        const bgImg = canvas.backgroundImage;
+                        ctx.drawImage(
+                            bgImg._element,
+                            bgImg.left - (bgImg.width * bgImg.scaleX) / 2,
+                            bgImg.top - (bgImg.height * bgImg.scaleY) / 2,
+                            bgImg.width * bgImg.scaleX,
+                            bgImg.height * bgImg.scaleY
+                        );
+                        
+                        // 3. Jantı çiz
+                        ctx.drawImage(
+                            wheelImage._element,
+                            wheelImage.left - (wheelImage.width * wheelImage.scaleX) / 2,
+                            wheelImage.top - (wheelImage.height * wheelImage.scaleY) / 2,
+                            wheelImage.width * wheelImage.scaleX,
+                            wheelImage.height * wheelImage.scaleY
+                        );
+                        
+                        // 4. iOS için özel indirme işlemi
+                        const dataURL = downloadCanvas.toDataURL('image/png');
+                        if (window.navigator.msSaveBlob) {
+                            // IE için
+                            window.navigator.msSaveBlob(downloadCanvas.msToBlob(), 'jant-montaj.png');
+                        } else {
+                            // Diğer tarayıcılar için
+                            const link = document.createElement('a');
+                            link.download = 'jant-montaj-' + new Date().getTime() + '.png';
+                            link.href = dataURL;
+                            
+                            // iOS Safari için özel işlem
+                            if (/(iP)/g.test(navigator.userAgent)) {
+                                const newWindow = window.open(dataURL, '_blank');
+                                if (!newWindow) {
+                                    statusEl.textContent = "Açılır pencere engellendi. Lütfen izin verin.";
+                                }
+                            } else {
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                            }
+                        }
+                        
+                        statusEl.textContent = "İndirme başladı!";
+                    } catch (error) {
+                        statusEl.textContent = "İndirme hatası: " + error.message;
+                    } finally {
+                        processingEl.style.display = 'none';
+                    }
+                }, 500);
+            });
+        });
     </script>
 </body>
 </html>
